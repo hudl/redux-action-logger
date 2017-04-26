@@ -1,4 +1,5 @@
 /* @flow */
+'use strict';
 import LargeItemLocalQueue from './LargeItemLocalQueue';
 import type { QueueStorageType } from './LargeItemLocalQueue';
 

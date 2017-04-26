@@ -1,4 +1,5 @@
 /*global __dirname, require, module*/
+'use strict';
 
 const webpack = require('webpack');
 const UglifyJsPlugin = webpack.optimize.UglifyJsPlugin;

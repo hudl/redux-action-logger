@@ -1,3 +1,5 @@
+'use strict';
+
 require('isomorphic-fetch'); // poly-fill fetch for node
 
 import { createEventLogger } from '../index.js';
