@@ -1,0 +1,23 @@
+[ignore]
+.*/node_modules/**/
+.*/__tests__/**/
+.*/lib/**/
+.*/.vscode/**/
+
+[include]
+./src/**/*.{js,jsx}
+../node_modules/
+
+[options]
+esproposal.class_instance_fields=enable
+esproposal.class_static_fields=enable
+module.system.node.resolve_dirname=source
+module.system.node.resolve_dirname=node_modules
+module.name_mapper='.*\.scss' -> '<PROJECT_ROOT>/CSSFlowStub.js.flow'
+module.system=node
+
+# These are added because flow is having issues resolving node_modules :(
+suppress_comment= \\(.\\|\n\\)*\\$FlowFixMe
+suppress_comment= \\(.\\|\n\\)*\\$FlowIssue
+suppress_comment= \\(.\\|\n\\)*\\LibImport
+suppress_comment= \\(.\\|\n\\)*\\FlowIgnore
