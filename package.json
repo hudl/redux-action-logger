@@ -47,7 +47,7 @@
   "homepage": "https://github.com/hudl/redux-action-logger#readme",
   "hudl-ci": {
     "buildCommand": "npm run build",
-    "lintCommand": "npm run lint",
+    "lintCommand": null,
     "testCommand": "npm run test:tc"
   }
 }
