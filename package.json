@@ -7,10 +7,10 @@
     "build": "./node_modules/.bin/webpack --env build",
     "dev": "./node_modules/.bin/webpack --progress --colors --watch --env dev",
     "flow": "./node_modules/.bin/flow check",
-    "flow:coverage": "./node_modules/.bin/flow coverage",
     "test": "./node_modules/.bin/jest",
     "test:tc": "./node_modules/.bin/jest",
-    "test:watch": "./node_modules/.bin/jest --watch"
+    "test:watch": "./node_modules/.bin/jest --watch",
+    "test:coverage": "./node_modules/.bin/jest --coverage"
   },
   "publishConfig": {
     "registry": "http://npm.thorhudl.com"
