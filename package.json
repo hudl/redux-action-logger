@@ -8,6 +8,9 @@
     "lint": "echo lint:done",
     "build": "echo build:done"
   },
+  "publishConfig": {
+    "registry": "http://npm.thorhudl.com"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/hudl/redux-action-logger.git"
