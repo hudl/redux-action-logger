@@ -1,0 +1,26 @@
+{
+  "name": "redux-action-logger",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test:tc": "echo test:done",
+    "lint": "echo lint:done",
+    "build": "echo build:done"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hudl/redux-action-logger.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hudl/redux-action-logger/issues"
+  },
+  "hudl-ci": {
+    "buildCommand": "npm run build",
+    "lintCommand": "npm run lint",
+    "testCommand": "npm run test:tc"
+  },
+  "homepage": "https://github.com/hudl/redux-action-logger#readme"
+}
