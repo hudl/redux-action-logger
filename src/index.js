@@ -189,6 +189,11 @@ export function createEventLogger(options: EventLoggerOptionsType): Function {
     if (endpoint.transformFunction) {
       result = endpoint.transformFunction.call(undefined, result);
     }
+
+    // if nothing to log at the end - just continue
+    if(isEmptyObject(result)) {
+      return next(action);
+    }
     // console.log('final audit object', result);
     const pushPromise = eventQueue.push(result);
 
