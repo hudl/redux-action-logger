@@ -67,19 +67,47 @@ const dummyStore = {
 
 describe('createEventLogger initialization', () => {
   test('attempt to createEventLogger with invalid inputs', async () => {
-    expect(() => createEventLogger({ name: null, actionHandlers: () => {} })).toThrow();
-    expect(() => createEventLogger({ name: '', actionHandlers: () => {} })).toThrow();
-
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: [] })).toThrow();
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: [null] })).toThrow();
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: ['foo'] })).toThrow();
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: [() => {}, 'foo'] })).toThrow();
+    expect(() => createEventLogger({ name: null, actionHandlers: () => {} })).toThrow(/name/);
+    expect(() => createEventLogger({ name: '', actionHandlers: () => {} })).toThrow(/name/);
+    expect(() => createEventLogger({ name: 123, actionHandlers: () => {} })).toThrow(/name/);
+    
+    expect(() => createEventLogger({ name: 'foo' })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: [] })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: [null] })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: ['foo'] })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: 123 })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: [() => {}, 'foo'] })).toThrow(/actionHandlers/);
 
     expect(() => createEventLogger({
       name: 'foo',
       actionHandlers: () => {},
       eventValidator: 'foobar',
-    })).toThrow();
+    })).toThrow(/eventValidator/);
+    expect(() => createEventLogger({
+      name: 'foo',
+      actionHandlers: () => {},
+    })).toThrow(/endpoint/);
+    expect(() => createEventLogger({
+      name: 'foo',
+      actionHandlers: () => {},
+      endpoint: {
+
+      }
+    })).toThrow(/endpoint/);
+    expect(() => createEventLogger({
+      name: 'foo',
+      actionHandlers: () => {},
+      endpoint: {
+        uri: 12345,
+      }
+    })).toThrow(/endpoint/);
+    expect(() => createEventLogger({
+      name: 'foo',
+      actionHandlers: () => {},
+      endpoint: {
+        uri: ()=>'test',
+      }
+    })).toThrow(/endpoint/);
   });
 
   test('single-actionHandler happy path', async () => {
@@ -518,6 +546,218 @@ describe('createEventLogger middleware tests', () => {
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
   });
-  // TODO: injection test, transform tests
-  // TODO: a transform test that makes sure the message is validated before transform
+  test('middleware doesnt log blank event', async () => {
+    const fakeObject = {
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const loggerName = 'test';
+
+    const middleware = createEventLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: dummyEndpoint,
+      queueStorage: localStorageMock,
+    });
+    const action = {
+      type: 'test-type',
+    };
+    const next = jest.fn().mockImplementation((a)=> a);
+    const fetchScope = nock(dummyDomain)
+      .post(dummyPath)
+      .reply(200);
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(0); // not queued
+    // wait for the fetch to execute
+    await sleep(1);
+    // verify log was not sent
+    expect(fetchScope.isDone()).toBeFalsy();
+    // verify queue is empty still
+    expect(localStorageMock._queueLength(loggerName)).toBe(0);
+  });
+  test('middleware transform success', async () => {
+    const fakeObject = {
+      item1: 'test',
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const loggerName = 'test';
+    const transformFunction = (e) => {
+      return {
+        data: e,
+        message: 'test',
+      };
+    };
+    const middleware = createEventLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: {
+        ...dummyEndpoint,
+        transformFunction: transformFunction,
+      },
+      queueStorage: localStorageMock,
+    });
+    const action = {
+      type: 'test-type',
+    };
+    const next = jest.fn().mockImplementation((a)=> a);
+    const fetchScope = nock(dummyDomain)
+      .post(dummyPath, {
+        message: 'test',
+        data: fakeObject
+      })
+      .reply(200);
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(1); // queued
+    // wait for the fetch to execute
+    await sleep(1);
+    // verify log was sent (with transform)
+    expect(fetchScope.isDone()).toBeTruthy();
+    // verify queue is empty
+    expect(localStorageMock._queueLength(loggerName)).toBe(0);
+  });
+  test('middleware injection, validation, and transform success', async () => {
+    const fakeObject = {
+      item1: 'test',
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const loggerName = 'test';
+    const transformFunction = (e) => {
+      return {
+        data: e,
+        message: 'test',
+      };
+    };
+    const injectedParameters = {
+      teamId: 123456,
+    };
+    // it is important that the validator run on the 'raw' log (before the endpoint transform)
+    // but after the injector
+    const trueEventValidator = (evt) => evt.item1 === 'test' && evt.teamId=== 123456 && !evt.data && !evt.message;
+
+    const middleware = createEventLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: {
+        ...dummyEndpoint,
+        transformFunction: transformFunction,
+      },
+      queueStorage: localStorageMock,
+      eventValidator: trueEventValidator,
+      injectedParameters: injectedParameters,
+    });
+    const action = {
+      type: 'test-type',
+    };
+    const next = jest.fn().mockImplementation((a)=> a);
+    const fetchScope = nock(dummyDomain)
+      .post(dummyPath, function (body) {
+        return body.message === 'test' && body.data.teamId === injectedParameters.teamId && body.data.item1 === 'test' && !body.item1;
+      })
+      .reply(200);
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(1); // queued
+    // wait for the fetch to execute
+    await sleep(1);
+    // verify log was sent (with transform)
+    expect(fetchScope.isDone()).toBeTruthy();
+    // verify queue is empty
+    expect(localStorageMock._queueLength(loggerName)).toBe(0);
+  });
+  test('middleware client network error => requeues', async () => {
+    const fakeObject = {
+      item: 123,
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const loggerName = 'test';
+
+    const middleware = createEventLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: dummyEndpoint,
+      queueStorage: localStorageMock,
+    });
+    const action = {
+      type: 'test-type',
+    };
+    const next = jest.fn().mockImplementation((a)=> a);
+    const fetchScope = nock(dummyDomain)
+      .post(dummyPath, fakeObject)
+      .replyWithError({code: 'ECONNRESET'}); // simulate client network failure
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(1); // in queue
+    // wait for the fetch to execute
+    await sleep(5); // this needs to be slightly longer than normal since there is a re-queue async
+    // verify log was sent (since valid)
+    expect(fetchScope.isDone()).toBeTruthy();
+    // verify queue still has item
+    expect(localStorageMock._queueLength(loggerName)).toBe(1);
+  });
+  test('middleware merged headers success', async () => {
+    const fakeObject = {
+      item1: 'test',
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const headers = {
+      h: true, 
+      b: 'test',
+      c: 1234,
+      u: (state)=>state.userId,
+    };
+    const loggerName = 'test';
+    const middleware = createEventLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: {
+        ...dummyEndpoint,
+        headers: headers,
+      },
+      queueStorage: localStorageMock,
+    });
+    const action = {
+      type: 'test-type',
+    };
+
+    const next = jest.fn().mockImplementation((a)=> a);
+    const fetchScope = nock(dummyDomain)
+      .matchHeader('h', 'true')
+      .matchHeader('b', 'test')
+      .matchHeader('c', '1234')
+      .matchHeader('u', dummyStore.getState().userId.toString())
+      .post(dummyPath, fakeObject)
+      .reply(200);
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(1); // queued
+    // wait for the fetch to execute
+    await sleep(1);
+    // verify log was sent (with transform)
+    expect(fetchScope.isDone()).toBeTruthy();
+    // verify queue is empty
+    expect(localStorageMock._queueLength(loggerName)).toBe(0);
+  });
+  // TODO: test merged headers
+  // TODO: test server side failure more
 });
