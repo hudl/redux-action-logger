@@ -210,13 +210,12 @@ export default class LargeItemLocalQueue {
         const promiseTest = storage.setItem('__storage-queue-test__', 'test');
         return (promiseTest && promiseTest.then) ? true : false;
       } catch (e) {
-        console.warn(e);
+        console.warn(e); // eslint-disable-line
         throw e;
       }
     } else {
       // es-lint-disable-next-line
-      console.warn(`Data will lost on write (/dev/null) without a storageBackend!
-      \nEither use localStorage(for web) or AsyncStorage(for React Native) as a storageBackend.`);
+      console.warn('Data will lost on write (/dev/null) without a storageBackend!'); // eslint-disable-line
       return false;
     }
   }

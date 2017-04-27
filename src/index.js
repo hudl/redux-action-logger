@@ -22,18 +22,18 @@ type ParameterType = string | ((state: Object) => string);
 // todo: better define Object types below
 type ActionHandlerType = (action: Object, state: Object) => ?Object;
 
-export type EventLoggerOptionsType = {
+export type ActionLoggerOptionsType = {
   name: string,
   actionHandlers: Array<ActionHandlerType> | ActionHandlerType,
   injectedParameters?: {[name: string]:  ParameterType},
   endpoint: EndpointType,
-  eventValidator?: (inputJson: Object) => boolean,
+  logValidator?: (inputJson: Object) => boolean,
   queueStorage?: QueueStorageType,
 };
 
 const isEmptyObject = (obj = {}) => !Object.keys(obj).length;
 
-async function sendEventToEndpoint(endpoint: EndpointType, state: Object, eventObject: Object): Promise<Response> {
+async function sendToEndpoint(endpoint: EndpointType, state: Object, log: Object): Promise<Response> {
   let headers = {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
@@ -59,47 +59,46 @@ async function sendEventToEndpoint(endpoint: EndpointType, state: Object, eventO
   return fetch(endpoint.uri, {
     method: 'POST',
     headers: headers,
-    body: JSON.stringify(eventObject),
+    body: JSON.stringify(log),
     credentials: endpoint.includeCredentials ? 'include' : 'omit',
     cache: 'no-cache',
   });
 }
-async function popAndSendEventToEndpoint(endpoint: EndpointType, state: Object, eventQueue: LargeItemLocalQueue)
+async function popAndSendToEndpoint(endpoint: EndpointType, state: Object, logQueue: LargeItemLocalQueue)
   : Promise<void> {
-  const nextEvent = await eventQueue.pop();
+  const nextLog = await logQueue.pop();
   // if there isn't another item - return
-  if (!nextEvent) {
+  if (!nextLog) {
     return;
   }
 
   try {
-    const response = await sendEventToEndpoint(endpoint, state, nextEvent);
+    const response = await sendToEndpoint(endpoint, state, nextLog);
     if (response.ok) {
       // attempt to get the next item from the queue
-      popAndSendEventToEndpoint(endpoint, state, eventQueue);
+      popAndSendToEndpoint(endpoint, state, logQueue);
     } else {
-      eventQueue.push(nextEvent);
+      logQueue.push(nextLog);
     }
   } catch (e) {
     // console.log('send failure', e);
     // this indicates a client error (probably no internet)
-    eventQueue.push(nextEvent);
+    logQueue.push(nextLog);
   }
 }
 
-export function createEventLogger(options: EventLoggerOptionsType): Function {
+export function createActionLogger(options: ActionLoggerOptionsType): Function {
   const {
     name,
     actionHandlers,
     endpoint,
     queueStorage = localStorage, // do we want to do this? or make the user pass it in (with suggestions)
     injectedParameters,
-    eventValidator,
+    logValidator,
   } = options;
 
-  // todo: validate options
-  if (eventValidator !== null && eventValidator !== undefined && (typeof eventValidator !== 'function')) {
-    throw new Error('eventValidator must be a function');
+  if (logValidator !== null && logValidator !== undefined && (typeof logValidator !== 'function')) {
+    throw new Error('logValidator must be a function');
   }
   if (!name) {
     throw new Error('a name is required');
@@ -133,9 +132,9 @@ export function createEventLogger(options: EventLoggerOptionsType): Function {
 
 
   // this is the initial setup area
-  const eventQueue = new LargeItemLocalQueue(name, queueStorage);
+  const logQueue = new LargeItemLocalQueue(name, queueStorage);
 
-  // this is the actual middleware function (called on every event)
+  // this is the actual middleware function (called on every action)
   return store => next => action => {
     let result;
     const curState = store.getState();
@@ -168,9 +167,9 @@ export function createEventLogger(options: EventLoggerOptionsType): Function {
       result = {...result, ...mergeObj};
     }
 
-    if (eventValidator) {
-      if (!eventValidator.call(undefined, result)) {
-        console.error('Logging event did not successfully validate and will not be sent.', result); // eslint-disable-line
+    if (logValidator) {
+      if (!logValidator.call(undefined, result)) {
+        console.error('Log did not successfully validate and will not be sent.', result); // eslint-disable-line
         return next(action);
       }
     }
@@ -184,14 +183,11 @@ export function createEventLogger(options: EventLoggerOptionsType): Function {
     if(isEmptyObject(result)) {
       return next(action);
     }
-    // console.log('final audit object', result);
-    const pushPromise = eventQueue.push(result);
 
-    pushPromise.then(() => popAndSendEventToEndpoint(endpoint, curState, eventQueue));
+    const pushPromise = logQueue.push(result);
+
+    pushPromise.then(() => popAndSendToEndpoint(endpoint, curState, logQueue));
 
     return pushPromise.then(()=> next(action));
-
-    // const nextResult = next(action);
-    // return nextResult;
   };
 }

@@ -2,7 +2,7 @@
 
 require('isomorphic-fetch'); // poly-fill fetch for node
 
-import { createEventLogger } from '../index.js';
+import { createActionLogger } from '../index.js';
 import nock from 'nock';
 
 const originalConsole = console;
@@ -65,43 +65,41 @@ const dummyStore = {
 };
 
 
-describe('createEventLogger initialization', () => {
-  test('attempt to createEventLogger with invalid inputs', async () => {
-    expect(() => createEventLogger({ name: null, actionHandlers: () => {} })).toThrow(/name/);
-    expect(() => createEventLogger({ name: '', actionHandlers: () => {} })).toThrow(/name/);
-    expect(() => createEventLogger({ name: 123, actionHandlers: () => {} })).toThrow(/name/);
+describe('createActionLogger initialization', () => {
+  test('attempt to createActionLogger with invalid inputs', async () => {
+    expect(() => createActionLogger({ name: null, actionHandlers: () => {} })).toThrow(/name/);
+    expect(() => createActionLogger({ name: '', actionHandlers: () => {} })).toThrow(/name/);
+    expect(() => createActionLogger({ name: 123, actionHandlers: () => {} })).toThrow(/name/);
     
-    expect(() => createEventLogger({ name: 'foo' })).toThrow(/actionHandlers/);
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: [] })).toThrow(/actionHandlers/);
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: [null] })).toThrow(/actionHandlers/);
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: ['foo'] })).toThrow(/actionHandlers/);
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: 123 })).toThrow(/actionHandlers/);
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: [() => {}, 'foo'] })).toThrow(/actionHandlers/);
+    expect(() => createActionLogger({ name: 'foo' })).toThrow(/actionHandlers/);
+    expect(() => createActionLogger({ name: 'foo', actionHandlers: [] })).toThrow(/actionHandlers/);
+    expect(() => createActionLogger({ name: 'foo', actionHandlers: [null] })).toThrow(/actionHandlers/);
+    expect(() => createActionLogger({ name: 'foo', actionHandlers: ['foo'] })).toThrow(/actionHandlers/);
+    expect(() => createActionLogger({ name: 'foo', actionHandlers: 123 })).toThrow(/actionHandlers/);
+    expect(() => createActionLogger({ name: 'foo', actionHandlers: [() => {}, 'foo'] })).toThrow(/actionHandlers/);
 
-    expect(() => createEventLogger({
+    expect(() => createActionLogger({
       name: 'foo',
       actionHandlers: () => {},
-      eventValidator: 'foobar',
-    })).toThrow(/eventValidator/);
-    expect(() => createEventLogger({
+      logValidator: 'foobar',
+    })).toThrow(/logValidator/);
+    expect(() => createActionLogger({
       name: 'foo',
       actionHandlers: () => {},
     })).toThrow(/endpoint/);
-    expect(() => createEventLogger({
+    expect(() => createActionLogger({
       name: 'foo',
       actionHandlers: () => {},
-      endpoint: {
-
-      }
+      endpoint: { }
     })).toThrow(/endpoint/);
-    expect(() => createEventLogger({
+    expect(() => createActionLogger({
       name: 'foo',
       actionHandlers: () => {},
       endpoint: {
         uri: 12345,
       }
     })).toThrow(/endpoint/);
-    expect(() => createEventLogger({
+    expect(() => createActionLogger({
       name: 'foo',
       actionHandlers: () => {},
       endpoint: {
@@ -112,7 +110,7 @@ describe('createEventLogger initialization', () => {
 
   test('single-actionHandler happy path', async () => {
     const dummyHandler = jest.fn();
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: 'test',
       actionHandlers: dummyHandler,
       endpoint: dummyEndpoint,
@@ -122,7 +120,7 @@ describe('createEventLogger initialization', () => {
   });
   test('array of actionHandlers happy path', async () => {
     const dummyHandler = jest.fn();
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: 'test',
       actionHandlers: [ dummyHandler, dummyHandler ],
       endpoint: dummyEndpoint,
@@ -132,7 +130,7 @@ describe('createEventLogger initialization', () => {
   });
 });
 
-describe('createEventLogger middleware tests', () => {
+describe('createActionLogger middleware tests', () => {
   beforeAll(() => {
     nock.disableNetConnect();
   });
@@ -145,11 +143,11 @@ describe('createEventLogger middleware tests', () => {
     const evtVal = jest.fn();
     const blankActionHandler = jest.fn(()=>null);
     const loggerName = 'test';
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ blankActionHandler ],
       endpoint: dummyEndpoint,
-      eventValidator: evtVal,
+      logValidator: evtVal,
     });
     const action = {
       type: 'test-type',
@@ -172,11 +170,11 @@ describe('createEventLogger middleware tests', () => {
       return null;
     } );
     const loggerName = 'test';
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ irrelevantActionHandler ],
       endpoint: dummyEndpoint,
-      eventValidator: evtVal,
+      logValidator: evtVal,
     });
     const action = {
       type: 'test-type',
@@ -203,7 +201,7 @@ describe('createEventLogger middleware tests', () => {
     } );
     const loggerName = 'test';
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: workingHandler,
       endpoint: dummyEndpoint,
@@ -249,7 +247,7 @@ describe('createEventLogger middleware tests', () => {
     } );
     const loggerName = 'test';
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: dummyEndpoint,
@@ -295,7 +293,7 @@ describe('createEventLogger middleware tests', () => {
     } );
     const loggerName = 'test';
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: dummyEndpoint,
@@ -344,7 +342,7 @@ describe('createEventLogger middleware tests', () => {
     // verify log is now flushed
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
   });
-  test('middleware verify correct event data sent', async () => {
+  test('middleware verify correct log data sent', async () => {
     const fakeObject = {
       op: 'test',
       func: 'test',
@@ -362,7 +360,7 @@ describe('createEventLogger middleware tests', () => {
     } );
     const loggerName = 'test';
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: dummyEndpoint,
@@ -384,7 +382,7 @@ describe('createEventLogger middleware tests', () => {
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
   });
-  test('middleware event validator failure', async () => {
+  test('middleware log validator failure', async () => {
     const fakeObject = {
     };
     const workingHandler = jest.fn((a)=> {
@@ -392,14 +390,14 @@ describe('createEventLogger middleware tests', () => {
       return null;
     } );
     const loggerName = 'test';
-    const falseEventValidator = () => false;
+    const falseLogValidator = () => false;
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: dummyEndpoint,
       queueStorage: localStorageMock,
-      eventValidator: falseEventValidator,
+      logValidator: falseLogValidator,
     });
     const action = {
       type: 'test-type',
@@ -421,7 +419,7 @@ describe('createEventLogger middleware tests', () => {
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
     _suppressConsole(false);
   });
-  test('middleware event validator success', async () => {
+  test('middleware log validator success', async () => {
     const fakeObject = {
       item: 123,
     };
@@ -430,14 +428,14 @@ describe('createEventLogger middleware tests', () => {
       return null;
     } );
     const loggerName = 'test';
-    const trueEventValidator = (evt) => evt.item === 123;
+    const trueLogValidator = (evt) => evt.item === 123;
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: dummyEndpoint,
       queueStorage: localStorageMock,
-      eventValidator: trueEventValidator,
+      logValidator: trueLogValidator,
     });
     const action = {
       type: 'test-type',
@@ -471,7 +469,7 @@ describe('createEventLogger middleware tests', () => {
       teamId: 123456,
     };
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: dummyEndpoint,
@@ -512,7 +510,7 @@ describe('createEventLogger middleware tests', () => {
     } );
     const loggerName = 'test';
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: workingHandler,
       endpoint: dummyEndpoint,
@@ -545,7 +543,7 @@ describe('createEventLogger middleware tests', () => {
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
   });
-  test('middleware doesnt log blank event', async () => {
+  test('middleware doesnt send blank log', async () => {
     const fakeObject = {
     };
     const workingHandler = jest.fn((a)=> {
@@ -554,7 +552,7 @@ describe('createEventLogger middleware tests', () => {
     } );
     const loggerName = 'test';
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: dummyEndpoint,
@@ -593,7 +591,7 @@ describe('createEventLogger middleware tests', () => {
         message: 'test',
       };
     };
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: {
@@ -643,9 +641,9 @@ describe('createEventLogger middleware tests', () => {
     };
     // it is important that the validator run on the 'raw' log (before the endpoint transform)
     // but after the injector
-    const trueEventValidator = (evt) => evt.item1 === 'test' && evt.teamId=== 123456 && !evt.data && !evt.message;
+    const trueLogValidator = (l) => l.item1 === 'test' && l.teamId=== 123456 && !l.data && !l.message;
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: {
@@ -653,7 +651,7 @@ describe('createEventLogger middleware tests', () => {
         transformFunction: transformFunction,
       },
       queueStorage: localStorageMock,
-      eventValidator: trueEventValidator,
+      logValidator: trueLogValidator,
       injectedParameters: injectedParameters,
     });
     const action = {
@@ -686,7 +684,7 @@ describe('createEventLogger middleware tests', () => {
     } );
     const loggerName = 'test';
 
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: dummyEndpoint,
@@ -725,7 +723,7 @@ describe('createEventLogger middleware tests', () => {
       u: (state)=>state.userId,
     };
     const loggerName = 'test';
-    const middleware = createEventLogger({
+    const middleware = createActionLogger({
       name: loggerName,
       actionHandlers: [ workingHandler ],
       endpoint: {
