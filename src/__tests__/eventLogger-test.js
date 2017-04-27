@@ -677,7 +677,87 @@ describe('createEventLogger middleware tests', () => {
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
   });
+  test('middleware client network error => requeues', async () => {
+    const fakeObject = {
+      item: 123,
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const loggerName = 'test';
+
+    const middleware = createEventLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: dummyEndpoint,
+      queueStorage: localStorageMock,
+    });
+    const action = {
+      type: 'test-type',
+    };
+    const next = jest.fn().mockImplementation((a)=> a);
+    const fetchScope = nock(dummyDomain)
+      .post(dummyPath, fakeObject)
+      .replyWithError({code: 'ECONNRESET'}); // simulate client network failure
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(1); // in queue
+    // wait for the fetch to execute
+    await sleep(5); // this needs to be slightly longer than normal since there is a re-queue async
+    // verify log was sent (since valid)
+    expect(fetchScope.isDone()).toBeTruthy();
+    // verify queue still has item
+    expect(localStorageMock._queueLength(loggerName)).toBe(1);
+  });
+  test('middleware merged headers success', async () => {
+    const fakeObject = {
+      item1: 'test',
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const headers = {
+      h: true, 
+      b: 'test',
+      c: 1234,
+      u: (state)=>state.userId,
+    };
+    const loggerName = 'test';
+    const middleware = createEventLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: {
+        ...dummyEndpoint,
+        headers: headers,
+      },
+      queueStorage: localStorageMock,
+    });
+    const action = {
+      type: 'test-type',
+    };
+
+    const next = jest.fn().mockImplementation((a)=> a);
+    const fetchScope = nock(dummyDomain)
+      .matchHeader('h', 'true')
+      .matchHeader('b', 'test')
+      .matchHeader('c', '1234')
+      .matchHeader('u', dummyStore.getState().userId.toString())
+      .post(dummyPath, fakeObject)
+      .reply(200);
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(1); // queued
+    // wait for the fetch to execute
+    await sleep(1);
+    // verify log was sent (with transform)
+    expect(fetchScope.isDone()).toBeTruthy();
+    // verify queue is empty
+    expect(localStorageMock._queueLength(loggerName)).toBe(0);
+  });
   // TODO: test merged headers
   // TODO: test server side failure more
-  // TODO: test client side failure (no internet)
 });

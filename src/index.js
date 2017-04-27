@@ -31,19 +31,7 @@ export type EventLoggerOptionsType = {
   queueStorage?: QueueStorageType,
 };
 
-const hasOwnProperty = Object.prototype.hasOwnProperty;
-function isEmptyObject(obj: ?Object): boolean {
-  if (obj === null) {
-    return true;
-  }
-  for (const key in obj) {
-    if (hasOwnProperty.call(obj, key)) {
-      return false;
-    }
-  }
-
-  return true;
-}
+const isEmptyObject = (obj = {}) => !Object.keys(obj).length;
 
 async function sendEventToEndpoint(endpoint: EndpointType, state: Object, eventObject: Object): Promise<Response> {
   let headers = {
@@ -58,6 +46,8 @@ async function sendEventToEndpoint(endpoint: EndpointType, state: Object, eventO
     for (const key in endpoint.headers) {
       if (typeof endpoint.headers[key] === 'function') {
         mergedHeaders[key] = (endpoint.headers[key].call(undefined, state): string);
+      } else if (typeof endpoint.headers[key] === 'boolean') {
+        mergedHeaders[key] = endpoint.headers[key].toString(); // booleans need to be manually converted
       }
     }
     headers = {
