@@ -134,7 +134,7 @@ export function createEventLogger(options: EventLoggerOptionsType): Function {
       }
     }
   }
-  if (endpoint === null) {
+  if (endpoint === null || endpoint === undefined) {
     throw new Error('endpoint is required');
   }
   if (!endpoint.uri || (typeof endpoint.uri !== 'string') || endpoint.uri.length === 0) {

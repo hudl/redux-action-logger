@@ -67,19 +67,47 @@ const dummyStore = {
 
 describe('createEventLogger initialization', () => {
   test('attempt to createEventLogger with invalid inputs', async () => {
-    expect(() => createEventLogger({ name: null, actionHandlers: () => {} })).toThrow();
-    expect(() => createEventLogger({ name: '', actionHandlers: () => {} })).toThrow();
-
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: [] })).toThrow();
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: [null] })).toThrow();
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: ['foo'] })).toThrow();
-    expect(() => createEventLogger({ name: 'foo', actionHandlers: [() => {}, 'foo'] })).toThrow();
+    expect(() => createEventLogger({ name: null, actionHandlers: () => {} })).toThrow(/name/);
+    expect(() => createEventLogger({ name: '', actionHandlers: () => {} })).toThrow(/name/);
+    expect(() => createEventLogger({ name: 123, actionHandlers: () => {} })).toThrow(/name/);
+    
+    expect(() => createEventLogger({ name: 'foo' })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: [] })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: [null] })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: ['foo'] })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: 123 })).toThrow(/actionHandlers/);
+    expect(() => createEventLogger({ name: 'foo', actionHandlers: [() => {}, 'foo'] })).toThrow(/actionHandlers/);
 
     expect(() => createEventLogger({
       name: 'foo',
       actionHandlers: () => {},
       eventValidator: 'foobar',
-    })).toThrow();
+    })).toThrow(/eventValidator/);
+    expect(() => createEventLogger({
+      name: 'foo',
+      actionHandlers: () => {},
+    })).toThrow(/endpoint/);
+    expect(() => createEventLogger({
+      name: 'foo',
+      actionHandlers: () => {},
+      endpoint: {
+
+      }
+    })).toThrow(/endpoint/);
+    expect(() => createEventLogger({
+      name: 'foo',
+      actionHandlers: () => {},
+      endpoint: {
+        uri: 12345,
+      }
+    })).toThrow(/endpoint/);
+    expect(() => createEventLogger({
+      name: 'foo',
+      actionHandlers: () => {},
+      endpoint: {
+        uri: ()=>'test',
+      }
+    })).toThrow(/endpoint/);
   });
 
   test('single-actionHandler happy path', async () => {
@@ -649,5 +677,7 @@ describe('createEventLogger middleware tests', () => {
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
   });
-  // TODO: a transform test that makes sure the message is validated before transform
+  // TODO: test merged headers
+  // TODO: test server side failure more
+  // TODO: test client side failure (no internet)
 });
