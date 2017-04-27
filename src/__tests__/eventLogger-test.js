@@ -531,7 +531,6 @@ describe('createEventLogger middleware tests', () => {
       .reply(200);
 
     const retVal1 = await middleware(dummyStore)(next)(action1);
-    await sleep(1);
     const retVal2 = await middleware(dummyStore)(next)(action2);
     // this is after the middlware is actually executed
     expect(retVal1).toBe(action1);

@@ -14,11 +14,47 @@ type QueueOperationResult = {
 };
 const DELIMITER = '|';
 
+class Semaphore {
+  queue: Array<Function>;
+  count: number;
+  max: number;
+
+  constructor(max: number) {
+    this.queue = [];
+    this.max = max;
+    this.count = 0;
+  }
+
+  async acquire(): Promise<boolean> {
+    // console.log('acquire', this.count, this.max);
+    if (this.count < this.max) {
+      this.count++;
+      return Promise.resolve(true);
+    }
+
+    return new Promise(resolve => {
+      this.queue.push(resolve);
+    });
+  }
+  release() : void {
+    if (this.queue.length > 0) {
+      // console.log('flushing the queue inside release()');
+      const next = this.queue.shift();
+      if (next !== null) {
+        next(true);
+      }
+    }
+      
+    this.count--;
+  }
+}
+
 export default class LargeItemLocalQueue {
   storage: ?QueueStorageType;
   prefix: string;
   isPromiseStorage: boolean;
   queueName: string;
+  lock: Semaphore;
 
   constructor(queuePrefix: string, storageBackend: ?QueueStorageType) {
     // todo: input validation
@@ -26,8 +62,12 @@ export default class LargeItemLocalQueue {
     this.prefix = queuePrefix;
     this.queueName = `${this.prefix}--queue`;
     this.isPromiseStorage = this._initStorageBackendType(this.storage);
+    this.lock = new Semaphore(1);
   }
   async push(item: Object) : Promise<void> {
+    const hasLock = await this.lock.acquire();
+    if (!hasLock) { throw new Error('failed to acquire lock'); }
+
     // generate a unique id for the object
     const newId = this._getUuid();
     const serializedObj = JSON.stringify(item);
@@ -35,8 +75,13 @@ export default class LargeItemLocalQueue {
     await this._setItem(newId, serializedObj);
     // push the id onto the main list array
     await this._pushItemIdOntoTrackingQueue(newId);
+
+    this.lock.release();
   }
   async pushAll(items: Array<Object>) : Promise<void> {
+    const hasLock = await this.lock.acquire();
+    if (!hasLock) { throw new Error('failed to acquire lock'); }
+
     // generate a unique ids for the objects and serialize
     const idsToItems = items.map((i)=> {return {id: this._getUuid(), item: JSON.stringify(i)};});
     // set the items in their specific location in storage
@@ -46,13 +91,19 @@ export default class LargeItemLocalQueue {
     }
     // push the id onto the main list array
     await this._pushItemIdOntoTrackingQueue(idsToItems.map(i=>i.id));
+
+    this.lock.release();
   }
   async pop() : Promise<?Object> {
+    const hasLock = await this.lock.acquire();
+    if (!hasLock) { throw new Error('failed to acquire lock'); }
+
     // get the 'first' id on the queue
     const {id, remainder} = await this._sliceFirstItemFromQueue();
 
     if (!id) {
       // console.log('empty queue');
+      this.lock.release();
       return null;
     }
     // console.log('popping', id, remainder);
@@ -62,6 +113,8 @@ export default class LargeItemLocalQueue {
     await this._setTrackingQueueDirect(remainder);
     // remove the unneeded reference object
     await this._removeItem(id);
+
+    this.lock.release();
 
     return item;
   }
