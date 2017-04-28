@@ -15,3 +15,4 @@ Since it plugs into redux via middleware and separate deterministic action handl
 
 ### Running tests
 
+[![codecov](https://codecov.io/gh/hudl/redux-action-logger/branch/master/graph/badge.svg)](https://codecov.io/gh/hudl/redux-action-logger)
