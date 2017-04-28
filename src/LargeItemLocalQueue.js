@@ -1,5 +1,7 @@
 /* @flow */
 
+import Semaphore from './Semaphore';
+
 // can be async or sync handler (promise or value directly). Storage is ES6 localstorage
 type QueueStorageAsyncInterface = {
   getItem: (key: string)=>  Promise<string>,
@@ -13,41 +15,7 @@ type QueueOperationResult = {
   remainder?: string,
 };
 const DELIMITER = '|';
-
-class Semaphore {
-  queue: Array<Function>;
-  count: number;
-  max: number;
-
-  constructor(max: number) {
-    this.queue = [];
-    this.max = max;
-    this.count = 0;
-  }
-
-  async acquire(): Promise<boolean> {
-    // console.log('acquire', this.count, this.max);
-    if (this.count < this.max) {
-      this.count++;
-      return Promise.resolve(true);
-    }
-
-    return new Promise(resolve => {
-      this.queue.push(resolve);
-    });
-  }
-  release() : void {
-    if (this.queue.length > 0) {
-      // console.log('flushing the queue inside release()');
-      const next = this.queue.shift();
-      if (next !== null) {
-        next(true);
-      }
-    }
-      
-    this.count--;
-  }
-}
+const LOCK_TIMEOUT = 20;
 
 export default class LargeItemLocalQueue {
   storage: ?QueueStorageType;
@@ -65,8 +33,11 @@ export default class LargeItemLocalQueue {
     this.lock = new Semaphore(1);
   }
   async push(item: Object) : Promise<void> {
-    const hasLock = await this.lock.acquire();
-    if (!hasLock) { throw new Error('failed to acquire lock'); }
+    const hasLock = await this.lock.acquire(LOCK_TIMEOUT);
+    if (!hasLock) { 
+      console.error('failed to acquire lock, could not push item.', item);
+      return;
+    }
 
     // generate a unique id for the object
     const newId = this._getUuid();
@@ -79,8 +50,11 @@ export default class LargeItemLocalQueue {
     this.lock.release();
   }
   async pushAll(items: Array<Object>) : Promise<void> {
-    const hasLock = await this.lock.acquire();
-    if (!hasLock) { throw new Error('failed to acquire lock'); }
+    const hasLock = await this.lock.acquire(LOCK_TIMEOUT);
+    if (!hasLock) { 
+      console.error('failed to acquire lock, could not push items.', items);
+      return;
+    }
 
     // generate a unique ids for the objects and serialize
     const idsToItems = items.map((i)=> {return {id: this._getUuid(), item: JSON.stringify(i)};});
@@ -95,8 +69,11 @@ export default class LargeItemLocalQueue {
     this.lock.release();
   }
   async pop() : Promise<?Object> {
-    const hasLock = await this.lock.acquire();
-    if (!hasLock) { throw new Error('failed to acquire lock'); }
+    const hasLock = await this.lock.acquire(LOCK_TIMEOUT);
+    if (!hasLock) { 
+      console.error('failed to acquire lock, returning null. However, there may be items in the queue.');
+      return null;
+    }
 
     // get the 'first' id on the queue
     const {id, remainder} = await this._sliceFirstItemFromQueue();
