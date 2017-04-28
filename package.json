@@ -1,6 +1,6 @@
 {
   "name": "redux-action-logger",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "A simple, extensible redux middleware system to generate logs from actions",
   "main": "lib/redux-action-logger.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "dev": "./node_modules/.bin/webpack --progress --colors --watch --env dev",
     "flow": "./node_modules/.bin/flow check",
     "test": "./node_modules/.bin/jest",
-    "test:tc": "./node_modules/.bin/jest",
+    "test:tc": "./node_modules/.bin/jest --coverage",
     "test:watch": "./node_modules/.bin/jest --watch",
     "test:coverage": "./node_modules/.bin/jest --coverage"
   },

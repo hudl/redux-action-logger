@@ -755,6 +755,45 @@ describe('createActionLogger middleware tests', () => {
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
   });
-  // TODO: test merged headers
+  test('middleware set includeCredentials', async () => {
+    const fakeObject = {
+      logitem: '1',
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const loggerName = 'test';
+
+    const middleware = createActionLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: {
+        ...dummyEndpoint,
+        includeCredentials: true,
+      },
+      queueStorage: localStorageMock,
+    });
+    const action = {
+      type: 'test-type',
+    };
+    const next = jest.fn().mockImplementation((a)=> a);
+    // TODO: I haven't figured out a way to 'inject' cookies into nock and verify
+    // they get sent or not sent. so for now we are just verifying this doesn't error out
+    const fetchScope = nock(dummyDomain)
+      .post(dummyPath, fakeObject)
+      .reply(200);
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(1); // queued
+    // wait for the fetch to execute
+    await sleep(1);
+    // verify log was not sent
+    expect(fetchScope.isDone()).toBeTruthy();
+    // verify queue is empty still
+    expect(localStorageMock._queueLength(loggerName)).toBe(0);
+  });
+
   // TODO: test server side failure more
 });
