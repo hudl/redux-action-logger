@@ -20,7 +20,7 @@ const LOCK_TIMEOUT = 20;
 export default class LargeItemLocalQueue {
   storage: ?QueueStorageType;
   prefix: string;
-  isPromiseStorage: boolean;
+  // isPromiseStorage: boolean;
   queueName: string;
   lock: Semaphore;
 
@@ -29,7 +29,7 @@ export default class LargeItemLocalQueue {
     this.storage = storageBackend;
     this.prefix = queuePrefix;
     this.queueName = `${this.prefix}--queue`;
-    this.isPromiseStorage = this._initStorageBackendType(this.storage);
+    // this.isPromiseStorage = this._initStorageBackendType(this.storage);
     this.lock = new Semaphore(1);
   }
   async push(item: Object) : Promise<void> {
@@ -181,21 +181,21 @@ export default class LargeItemLocalQueue {
     }
     return Promise.resolve(this.storage.removeItem(key));
   }
-  _initStorageBackendType(storage: ?QueueStorageType) : bool {
-    if (storage && storage.setItem) {
-      try {
-        const promiseTest = storage.setItem('__storage-queue-test__', 'test');
-        return (promiseTest && promiseTest.then) ? true : false;
-      } catch (e) {
-        console.warn(e); // eslint-disable-line
-        throw e;
-      }
-    } else {
-      // es-lint-disable-next-line
-      console.warn('Data will lost on write (/dev/null) without a storageBackend!'); // eslint-disable-line
-      return false;
-    }
-  }
+  // _initStorageBackendType(storage: ?QueueStorageType) : bool {
+  //   if (storage && storage.setItem) {
+  //     try {
+  //       const promiseTest = storage.setItem('__storage-queue-test__', 'test');
+  //       return (promiseTest && promiseTest.then) ? true : false;
+  //     } catch (e) {
+  //       console.warn(e); // eslint-disable-line
+  //       throw e;
+  //     }
+  //   } else {
+  //     // es-lint-disable-next-line
+  //     console.warn('Data will lost on write (/dev/null) without a storageBackend!'); // eslint-disable-line
+  //     return false;
+  //   }
+  // }
   _getUuid(): string {
     return (Math.round(Math.random() * 1E16)).toString(16);
   }
