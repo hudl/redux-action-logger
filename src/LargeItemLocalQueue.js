@@ -2,6 +2,23 @@
 
 import Semaphore from './Semaphore';
 
+const inMemoryLocalStorage : QueueStorageAsyncInterface = (function() {
+  let store = {};
+  return {
+    getItem: function(key: string) : Promise<string> {
+      return Promise.resolve(store[key]);
+    },
+    setItem: function(key: string, value: string): Promise<void> {
+      store[key] = value.toString();
+      return Promise.resolve();
+    },
+    removeItem: function(key:string) : Promise<void> {
+      delete store[key];
+      return Promise.resolve();
+    },
+  };
+});
+
 // can be async or sync handler (promise or value directly). Storage is ES6 localstorage
 type QueueStorageAsyncInterface = {
   getItem: (key: string)=>  Promise<string>,
@@ -24,7 +41,7 @@ export default class LargeItemLocalQueue {
   queueName: string;
   lock: Semaphore;
 
-  constructor(queuePrefix: string, storageBackend: ?QueueStorageType) {
+  constructor(queuePrefix: string, storageBackend: ?QueueStorageType = inMemoryLocalStorage()) {
     // todo: input validation
     this.storage = storageBackend;
     this.prefix = queuePrefix;
@@ -150,10 +167,6 @@ export default class LargeItemLocalQueue {
     // console.log('new queue state', final);
   }
   async _setItem(key: string, value: string): Promise<void> {
-    if (!this.storage) {
-      return Promise.resolve();
-    }
-
     // note: this fanciness will wrap a sync call in a promise
     // for an async call it will return a no-op 'then' after the async call
     // therefore call will always be async
@@ -170,32 +183,11 @@ export default class LargeItemLocalQueue {
     return JSON.parse(item);
   }
   async _getItem(key: string): Promise<?string> {
-    if (!this.storage) {
-      return Promise.resolve(null);
-    }
     return Promise.resolve(this.storage.getItem(key));
   }
   async _removeItem(key: string): Promise<void> {
-    if (!this.storage) {
-      return Promise.resolve();
-    }
     return Promise.resolve(this.storage.removeItem(key));
   }
-  // _initStorageBackendType(storage: ?QueueStorageType) : bool {
-  //   if (storage && storage.setItem) {
-  //     try {
-  //       const promiseTest = storage.setItem('__storage-queue-test__', 'test');
-  //       return (promiseTest && promiseTest.then) ? true : false;
-  //     } catch (e) {
-  //       console.warn(e); // eslint-disable-line
-  //       throw e;
-  //     }
-  //   } else {
-  //     // es-lint-disable-next-line
-  //     console.warn('Data will lost on write (/dev/null) without a storageBackend!'); // eslint-disable-line
-  //     return false;
-  //   }
-  // }
   _getUuid(): string {
     return (Math.round(Math.random() * 1E16)).toString(16);
   }

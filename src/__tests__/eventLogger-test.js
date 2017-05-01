@@ -36,9 +36,6 @@ const localStorageMock = (function() {
     clear: function() {
       store = {};
     },
-    _dumpStore: function() {
-      return store;
-    },
     _queueLength: function(name) {
       const queue = store[name + '--queue'];
       if (!queue) return 0;
@@ -234,7 +231,6 @@ describe('createActionLogger middleware tests', () => {
     expect(fetchScope.isDone()).toBeTruthy();
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
-    // console.log(localStorageMock._dumpStore());
   });
   test('middleware endpoint fails - requeues', async () => {
     const fakeObject = {
@@ -280,7 +276,6 @@ describe('createActionLogger middleware tests', () => {
     expect(fetchScope.isDone()).toBeTruthy();
     // verify the item is back in the queue
     expect(localStorageMock._queueLength(loggerName)).toBe(1);
-    // console.log(localStorageMock._dumpStore());
   });
   test('middleware endpoint fails first call - requeues, both succeed on second try', async () => {
     const fakeObject = {
