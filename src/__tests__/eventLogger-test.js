@@ -30,14 +30,11 @@ const localStorageMock = (function() {
     setItem: function(key, value) {
       store[key] = value.toString();
     },
-    removeItem: function(key, value) {
+    removeItem: function(key) {
       delete store[key];
     },
     clear: function() {
       store = {};
-    },
-    _dumpStore: function() {
-      return store;
     },
     _queueLength: function(name) {
       const queue = store[name + '--queue'];
@@ -234,7 +231,6 @@ describe('createActionLogger middleware tests', () => {
     expect(fetchScope.isDone()).toBeTruthy();
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
-    // console.log(localStorageMock._dumpStore());
   });
   test('middleware endpoint fails - requeues', async () => {
     const fakeObject = {
@@ -280,7 +276,6 @@ describe('createActionLogger middleware tests', () => {
     expect(fetchScope.isDone()).toBeTruthy();
     // verify the item is back in the queue
     expect(localStorageMock._queueLength(loggerName)).toBe(1);
-    // console.log(localStorageMock._dumpStore());
   });
   test('middleware endpoint fails first call - requeues, both succeed on second try', async () => {
     const fakeObject = {
@@ -702,7 +697,7 @@ describe('createActionLogger middleware tests', () => {
 
     expect(localStorageMock._queueLength(loggerName)).toBe(1); // in queue
     // wait for the fetch to execute
-    await sleep(5); // this needs to be slightly longer than normal since there is a re-queue async
+    await sleep(10); // this needs to be slightly longer than normal since there is a re-queue async
     // verify log was sent (since valid)
     expect(fetchScope.isDone()).toBeTruthy();
     // verify queue still has item
@@ -788,7 +783,7 @@ describe('createActionLogger middleware tests', () => {
 
     expect(localStorageMock._queueLength(loggerName)).toBe(1); // queued
     // wait for the fetch to execute
-    await sleep(1);
+    await sleep(5);
     // verify log was not sent
     expect(fetchScope.isDone()).toBeTruthy();
     // verify queue is empty still

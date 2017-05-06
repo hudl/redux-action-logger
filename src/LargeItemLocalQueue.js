@@ -17,25 +17,58 @@ type QueueOperationResult = {
 const DELIMITER = '|';
 const LOCK_TIMEOUT = 20;
 
+const inMemoryLocalStorage : (()=>QueueStorageAsyncInterface) = (function() {
+  const store: {[key: string]:  string} = {};
+  return {
+    getItem: function(key: string) : Promise<string> {
+      return Promise.resolve(store[key]);
+    },
+    setItem: function(key: string, value: string): Promise<void> {
+      store[key] = value.toString();
+      return Promise.resolve();
+    },
+    removeItem: function(key:string) : Promise<void> {
+      delete store[key];
+      return Promise.resolve();
+    },
+  };
+});
+
 export default class LargeItemLocalQueue {
-  storage: ?QueueStorageType;
+  storage: QueueStorageType;
   prefix: string;
   // isPromiseStorage: boolean;
   queueName: string;
   lock: Semaphore;
 
-  constructor(queuePrefix: string, storageBackend: ?QueueStorageType) {
-    // todo: input validation
+  constructor(queuePrefix: string, storageBackend: QueueStorageType = inMemoryLocalStorage()) {
     this.storage = storageBackend;
     this.prefix = queuePrefix;
     this.queueName = `${this.prefix}--queue`;
-    // this.isPromiseStorage = this._initStorageBackendType(this.storage);
     this.lock = new Semaphore(1);
+    this._validateArguments();
+  }
+  _validateArguments() : void {
+    if (!this.storage) {
+      throw new Error('Storage backend can not be null');
+    }
+    if (!this.prefix || this.prefix === '' || typeof this.prefix !== 'string') {
+      throw new Error('Queue prefix must be specified');
+    }
+
+    if (typeof this.storage.getItem !== 'function' || 
+        typeof this.storage.setItem !== 'function' ||
+        typeof this.storage.removeItem !== 'function') {
+      throw new Error('Invalid storage backend specified. Needs getItem/setItem/removeItem');
+    }
   }
   async push(item: Object) : Promise<void> {
+    if (item === null || item === undefined) {
+      throw new Error('Item can not be null or undefined');
+    }
     const hasLock = await this.lock.acquire(LOCK_TIMEOUT);
     if (!hasLock) { 
-      console.error('failed to acquire lock, could not push item.', item);
+      console.error('failed to acquire lock, could not push item.', item); // eslint-disable-line
       return;
     }
 
@@ -50,9 +83,15 @@ export default class LargeItemLocalQueue {
     this.lock.release();
   }
   async pushAll(items: Array<Object>) : Promise<void> {
+    if (items === null || items === undefined) {
+      throw new Error('Items can not be null or undefined');
+    }
+    if (!items.length) {
+      throw new Error('Items must be valid array with length > 0.');    
+    }
     const hasLock = await this.lock.acquire(LOCK_TIMEOUT);
     if (!hasLock) { 
-      console.error('failed to acquire lock, could not push items.', items);
+      console.error('failed to acquire lock, could not push items.', items); // eslint-disable-line
       return;
     }
 
@@ -71,7 +110,7 @@ export default class LargeItemLocalQueue {
   async pop() : Promise<?Object> {
     const hasLock = await this.lock.acquire(LOCK_TIMEOUT);
     if (!hasLock) { 
-      console.error('failed to acquire lock, returning null. However, there may be items in the queue.');
+      console.error('failed to acquire lock, returning null. However, there may be items in the queue.'); // eslint-disable-line
       return null;
     }
 
@@ -150,10 +189,6 @@ export default class LargeItemLocalQueue {
     // console.log('new queue state', final);
   }
   async _setItem(key: string, value: string): Promise<void> {
-    if (!this.storage) {
-      return Promise.resolve();
-    }
-
     // note: this fanciness will wrap a sync call in a promise
     // for an async call it will return a no-op 'then' after the async call
     // therefore call will always be async
@@ -170,32 +205,11 @@ export default class LargeItemLocalQueue {
     return JSON.parse(item);
   }
   async _getItem(key: string): Promise<?string> {
-    if (!this.storage) {
-      return Promise.resolve(null);
-    }
     return Promise.resolve(this.storage.getItem(key));
   }
   async _removeItem(key: string): Promise<void> {
-    if (!this.storage) {
-      return Promise.resolve();
-    }
     return Promise.resolve(this.storage.removeItem(key));
   }
-  // _initStorageBackendType(storage: ?QueueStorageType) : bool {
-  //   if (storage && storage.setItem) {
-  //     try {
-  //       const promiseTest = storage.setItem('__storage-queue-test__', 'test');
-  //       return (promiseTest && promiseTest.then) ? true : false;
-  //     } catch (e) {
-  //       console.warn(e); // eslint-disable-line
-  //       throw e;
-  //     }
-  //   } else {
-  //     // es-lint-disable-next-line
-  //     console.warn('Data will lost on write (/dev/null) without a storageBackend!'); // eslint-disable-line
-  //     return false;
-  //   }
-  // }
   _getUuid(): string {
     return (Math.round(Math.random() * 1E16)).toString(16);
   }
