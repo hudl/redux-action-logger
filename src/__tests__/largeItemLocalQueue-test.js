@@ -38,14 +38,11 @@ describe('largeItemLocalQueue initialization', () => {
 describe('push() tests', () => {
   test('invalid parameters', async () => {
     const q = new LargeItemLocalQueue('test');
-    // in this version of Jest throwing async errors is messed up :(
-    const hasError = await q.push(null)
-      .then(()=>false, ()=>true);
-    expect(hasError).toBeTruthy();
 
-    const hasError2 = await q.push()
-      .then(()=>false, ()=>true);
-    expect(hasError2).toBeTruthy();
+    await expect(q.push(null)).rejects.toBeInstanceOf(Error);
+
+    await expect(q.push()).rejects.toBeInstanceOf(Error);
+
   });
   test('test primatives', async () => {
     const q = new LargeItemLocalQueue('test');
@@ -139,11 +136,11 @@ describe('push() tests', () => {
 describe('pushAll() tests', () => {
   test('invalid parameters', async () => {
     const q = new LargeItemLocalQueue('test');
-    // in this version of Jest throwing async errors is messed up :(
-    expect(await q.pushAll(null).then(()=>false, ()=>true)).toBeTruthy();
-    expect(await q.pushAll().then(()=>false, ()=>true)).toBeTruthy();
-    expect(await q.pushAll([]).then(()=>false, ()=>true)).toBeTruthy();
-    expect(await q.pushAll({}).then(()=>false, ()=>true)).toBeTruthy();
+    await expect(q.pushAll(null)).rejects.toBeInstanceOf(Error);
+    await expect(q.pushAll()).rejects.toBeInstanceOf(Error);
+    await expect(q.pushAll([])).rejects.toBeInstanceOf(Error);
+    await expect(q.pushAll({})).rejects.toBeInstanceOf(Error);
+
   });
   test('happy path', async () => {
     const q = new LargeItemLocalQueue('test');
