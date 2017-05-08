@@ -9,12 +9,14 @@ type EndpointHeaderType = {[header: string]: (string | Function)};
 // transform takes the raw json event object. output is translated object
 type TransformFunctionType = (inputJson: Object) => Object;
 
-export type EndpointType = {
+type HttpEndpointConfig = {
   uri: string,
   includeCredentials?: boolean,
   transformFunction?:  TransformFunctionType,
   headers?: EndpointHeaderType,
 };
+type CustomEndpointFunction = (log: Object, state: Object) => Promise<bool>;
+export type EndpointType = HttpEndpointConfig | CustomEndpointFunction;
 
 // injectedParamters can be a string or function which is passed state
 type ParameterType = string | ((state: Object) => string);
@@ -33,38 +35,62 @@ export type ActionLoggerOptionsType = {
 
 const isEmptyObject = (obj = {}) => !Object.keys(obj).length;
 
-async function sendToEndpoint(endpoint: EndpointType, state: Object, log: Object): Promise<Response> {
-  let headers = {
+function createDefaultEndpointFunction(endpoint: HttpEndpointConfig): CustomEndpointFunction {
+  const defaultHeaders = {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
   };
+  const headers = endpoint.headers;
+  const includeCredentials = endpoint.includeCredentials;
+  const transform = endpoint.transformFunction;
+  const uri = endpoint.uri;
 
-  if (endpoint.headers) {
-    const mergedHeaders = {...endpoint.headers};
+  return (log: Object, state: Object): Promise<bool> => {
+    let finalHeaders = {};
+    let finalLog = log;
 
-    // go through each header. if function - call and replace value
-    for (const key in endpoint.headers) {
-      if (typeof endpoint.headers[key] === 'function') {
-        mergedHeaders[key] = (endpoint.headers[key].call(undefined, state): string);
-      } else if (typeof endpoint.headers[key] === 'boolean') {
-        mergedHeaders[key] = endpoint.headers[key].toString(); // booleans need to be manually converted
+    if (headers) {
+      const mergedHeaders = {...headers};
+
+      // go through each header. if function - call and replace value
+      for (const key in endpoint.headers) {
+        if (typeof endpoint.headers[key] === 'function') {
+          try {
+            mergedHeaders[key] = (endpoint.headers[key].call(undefined, state): string);
+          } catch(ex) {
+            console.warn(ex); // eslint-disable-line
+            mergedHeaders[key] = 'Error generating header value';
+          }
+
+        } else if (typeof endpoint.headers[key] === 'boolean') {
+          mergedHeaders[key] = endpoint.headers[key].toString(); // booleans need to be manually converted
+        }
       }
+      finalHeaders = {
+        ...defaultHeaders,
+        ...mergedHeaders,
+      };
     }
-    headers = {
-      ...headers,
-      ...mergedHeaders,
-    };
-  }
 
-  return fetch(endpoint.uri, {
-    method: 'POST',
-    headers: headers,
-    body: JSON.stringify(log),
-    credentials: endpoint.includeCredentials ? 'include' : 'omit',
-    cache: 'no-cache',
-  });
+    if (transform) {
+      finalLog = transform.call(undefined, finalLog);
+    }
+
+    return fetch(uri, {
+      method: 'POST',
+      headers: finalHeaders,
+      body: JSON.stringify(finalLog),
+      credentials: includeCredentials ? 'include' : 'omit',
+      cache: 'no-cache',
+    }).then((response)=> {
+      return response.ok; // return success
+    }, ()=> {
+      return false;
+    });
+  };
 }
-async function popAndSendToEndpoint(endpoint: EndpointType, state: Object, logQueue: LargeItemLocalQueue)
+
+async function popAndSendToEndpoint(endpointFunction: Function, state: Object, logQueue: LargeItemLocalQueue)
   : Promise<void> {
   const nextLog = await logQueue.pop();
   // if there isn't another item - return
@@ -72,17 +98,11 @@ async function popAndSendToEndpoint(endpoint: EndpointType, state: Object, logQu
     return;
   }
 
-  try {
-    const response = await sendToEndpoint(endpoint, state, nextLog);
-    if (response.ok) {
-      // attempt to get the next item from the queue
-      popAndSendToEndpoint(endpoint, state, logQueue);
-    } else {
-      logQueue.push(nextLog);
-    }
-  } catch (e) {
-    // console.log('send failure', e);
-    // this indicates a client error (probably no internet)
+  const success = await endpointFunction(nextLog, state);
+  if (success) {
+    // attempt to get the next item from the queue
+    popAndSendToEndpoint(endpointFunction, state, logQueue);
+  } else {
     logQueue.push(nextLog);
   }
 }
@@ -126,10 +146,19 @@ export function createActionLogger(options: ActionLoggerOptionsType): Function {
   if (endpoint === null || endpoint === undefined) {
     throw new Error('endpoint is required');
   }
-  if (!endpoint.uri || (typeof endpoint.uri !== 'string') || endpoint.uri.length === 0) {
-    throw new Error('endpoint.uri must be a valid string');
-  }
 
+  let endpointFunction;
+  if (typeof endpoint === 'function') {
+    if (endpoint.length != 2) {
+      throw new Error('endpoint custom function must accept two arguments. log:Object and state:Object');
+    }
+    endpointFunction = endpoint;
+  } else {
+    if (!endpoint.uri || (typeof endpoint.uri !== 'string') || endpoint.uri.length === 0) {
+      throw new Error('endpoint.uri must be a valid string');
+    }
+    endpointFunction = createDefaultEndpointFunction(endpoint);
+  }
 
   // this is the initial setup area
   const logQueue = new LargeItemLocalQueue(name, queueStorage);
@@ -174,11 +203,6 @@ export function createActionLogger(options: ActionLoggerOptionsType): Function {
       }
     }
 
-
-    if (endpoint.transformFunction) {
-      result = endpoint.transformFunction.call(undefined, result);
-    }
-
     // if nothing to log at the end - just continue
     if(isEmptyObject(result)) {
       return next(action);
@@ -186,7 +210,7 @@ export function createActionLogger(options: ActionLoggerOptionsType): Function {
 
     const pushPromise = logQueue.push(result);
 
-    pushPromise.then(() => popAndSendToEndpoint(endpoint, curState, logQueue));
+    pushPromise.then(() => popAndSendToEndpoint(endpointFunction, curState, logQueue));
 
     return pushPromise.then(()=> next(action));
   };

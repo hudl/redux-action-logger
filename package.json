@@ -1,6 +1,6 @@
 {
   "name": "redux-action-logger",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "A simple, extensible redux middleware system to generate logs from actions",
   "main": "lib/redux-action-logger.js",
   "scripts": {

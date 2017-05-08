@@ -715,7 +715,8 @@ describe('createActionLogger middleware tests', () => {
       h: true, 
       b: 'test',
       c: 1234,
-      u: (state)=>state.userId,
+      u: (state)=> state.userId,
+      f: ()=> {throw new Error('failure!');},
     };
     const loggerName = 'test';
     const middleware = createActionLogger({
@@ -737,8 +738,12 @@ describe('createActionLogger middleware tests', () => {
       .matchHeader('b', 'test')
       .matchHeader('c', '1234')
       .matchHeader('u', dummyStore.getState().userId.toString())
+      .matchHeader('f', /Error/)
       .post(dummyPath, fakeObject)
       .reply(200);
+
+    // because we know this logs a warning as it should
+    _suppressConsole(true);
 
     await middleware(dummyStore)(next)(action);
 
@@ -749,6 +754,8 @@ describe('createActionLogger middleware tests', () => {
     expect(fetchScope.isDone()).toBeTruthy();
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
+    
+    _suppressConsole(false);
   });
   test('middleware set includeCredentials', async () => {
     const fakeObject = {
@@ -791,4 +798,110 @@ describe('createActionLogger middleware tests', () => {
   });
 
   // TODO: test server side failure more
+});
+
+describe('createActionLogger custom endpoints', () => {
+  beforeAll(() => {
+  });
+  beforeEach(() => {
+    localStorageMock.clear();
+  });
+
+  test('bad custom function', async () => {
+    expect(()=> createActionLogger({
+      name: 'test',
+      actionHandlers: [ jest.fn() ],
+      endpoint: (log) => 
+      {
+        return false;
+      },
+      queueStorage: localStorageMock,
+    })).toThrow(/arguments/);
+
+    expect(()=> createActionLogger({
+      name: 'test',
+      actionHandlers: [ jest.fn() ],
+      endpoint: () => 
+      {
+        return false;
+      },
+      queueStorage: localStorageMock,
+    })).toThrow(/arguments/);
+
+  });
+  test('base case', async () => {
+    const fakeObject = {
+      a: 'test',
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const loggerName = 'test';
+
+    const endpointHandler = jest.fn();
+
+    const middleware = createActionLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: (log, state) => 
+      {
+        endpointHandler();
+        return true;
+      },
+      queueStorage: localStorageMock,
+    });
+    const action = {
+      type: 'test-type',
+    };
+    const next = jest.fn().mockImplementation((a)=> a);
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(1); // queued
+    // wait for the fetch to execute
+    await sleep(1);
+    // verify queue is empty
+    expect(localStorageMock._queueLength(loggerName)).toBe(0);
+    //endpoint function is called once
+    expect(endpointHandler).toHaveBeenCalledTimes(1);
+  });
+
+  test('failure case', async () => {
+    const fakeObject = {
+      a: 'test',
+    };
+    const workingHandler = jest.fn((a)=> {
+      if (a.type === 'test-type') return fakeObject;
+      return null;
+    } );
+    const loggerName = 'test';
+
+    const endpointHandler = jest.fn();
+
+    const middleware = createActionLogger({
+      name: loggerName,
+      actionHandlers: [ workingHandler ],
+      endpoint: (log, state) => 
+      {
+        endpointHandler();
+        return false;
+      },
+      queueStorage: localStorageMock,
+    });
+    const action = {
+      type: 'test-type',
+    };
+    const next = jest.fn().mockImplementation((a)=> a);
+
+    await middleware(dummyStore)(next)(action);
+
+    expect(localStorageMock._queueLength(loggerName)).toBe(1); // queued
+    // wait for the fetch to execute
+    await sleep(1);
+    // verify still in queue (since failure)
+    expect(localStorageMock._queueLength(loggerName)).toBe(1);
+    //endpoint function is called once
+    expect(endpointHandler).toHaveBeenCalledTimes(1);
+  });
 });
