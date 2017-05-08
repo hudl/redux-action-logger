@@ -55,7 +55,13 @@ function createDefaultEndpointFunction(endpoint: HttpEndpointConfig): CustomEndp
       // go through each header. if function - call and replace value
       for (const key in endpoint.headers) {
         if (typeof endpoint.headers[key] === 'function') {
-          mergedHeaders[key] = (endpoint.headers[key].call(undefined, state): string);
+          try {
+            mergedHeaders[key] = (endpoint.headers[key].call(undefined, state): string);
+          } catch(ex) {
+            console.warn(ex); // eslint-disable-line
+            mergedHeaders[key] = 'Error generating header value';
+          }
+
         } else if (typeof endpoint.headers[key] === 'boolean') {
           mergedHeaders[key] = endpoint.headers[key].toString(); // booleans need to be manually converted
         }

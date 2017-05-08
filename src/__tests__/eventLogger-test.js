@@ -715,7 +715,8 @@ describe('createActionLogger middleware tests', () => {
       h: true, 
       b: 'test',
       c: 1234,
-      u: (state)=>state.userId,
+      u: (state)=> state.userId,
+      f: ()=> {throw new Error('failure!');},
     };
     const loggerName = 'test';
     const middleware = createActionLogger({
@@ -737,8 +738,12 @@ describe('createActionLogger middleware tests', () => {
       .matchHeader('b', 'test')
       .matchHeader('c', '1234')
       .matchHeader('u', dummyStore.getState().userId.toString())
+      .matchHeader('f', /Error/)
       .post(dummyPath, fakeObject)
       .reply(200);
+
+    // because we know this logs a warning as it should
+    _suppressConsole(true);
 
     await middleware(dummyStore)(next)(action);
 
@@ -749,6 +754,8 @@ describe('createActionLogger middleware tests', () => {
     expect(fetchScope.isDone()).toBeTruthy();
     // verify queue is empty
     expect(localStorageMock._queueLength(loggerName)).toBe(0);
+    
+    _suppressConsole(false);
   });
   test('middleware set includeCredentials', async () => {
     const fakeObject = {
